@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard météo - Temps Réel</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 20px;
+      font-family: Verdana, sans-serif;
+      background-color: #f9f9f9;
+    }
+
+    .container {
+      display: flex;
+      gap: 20px;
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
+
+    .table-container {
+      flex: 1;
+      min-width: 320px;
+    }
+
+    .charts-container {
+      flex: 2;
+      min-width: 400px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      border: 1px solid #ddd;
+    }
+
+    th, td {
+      border-bottom: 1px solid #ddd;
+      padding: 10px 15px;
+      text-align: left;
+      height: 35px;
+    }
+
+    th {
+      color: #555;
+      background-color: #f2f2f2;
+    }
+
+    .chart-box {
+      background: white;
+      border: 1px solid #ddd;
+      padding: 15px;
+      margin-bottom: 20px;
+      height: 300px;
+    }
+
+    canvas {
+      width: 100% !important;
+      height: 100% !important;
+    }
+
+    #status {
+      margin-top: 10px;
+      font-size: 14px;
+      color: #444;
+      font-weight: bold;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <div class="table-container">
+      <table id="myTable">
+        <thead>
+          <tr>
+            <th>Mois</th>
+            <th>Max./Min. (°C)</th>
+            <th>Pluie</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <div id="status">Connexion en cours...</div>
+    </div>
+
+    <div class="charts-container">
+      <div class="chart-box">
+        <canvas id="myChart"></canvas>
+      </div>
+      <div class="chart-box">
+        <canvas id="myChart1"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@2.8.0"></script>
+  
+  <script>
+    // 1. Initialisation des tableaux de données
+    const mois_tab = [];
+    const max_tab = [];
+    const min_tab = [];
+    const pluie_tab = [];
+
+    // 2. Configuration du graphique des températures (Line)
+    const ctxTemp = document.getElementById("myChart").getContext("2d");
+    const chartTemp = new Chart(ctxTemp, {
+      type: "line",
+      data: {
+        labels: mois_tab,
+        datasets: [
+          {
+            label: "Max.",
+            data: max_tab,
+            fill: false,
+            lineTension: 0.3,
+            borderColor: "#4da6ff"
+          },
+          {
+            label: "Min.",
+            data: min_tab,
+            fill: false,
+            lineTension: 0.3,
+            borderColor: "#0033cc"
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          yAxes: [{ ticks: { beginAtZero: true } }]
+        }
+      }
+    });
+
+    // 3. Configuration du graphique de pluie (Bar)
+    const ctxPluie = document.getElementById("myChart1").getContext("2d");
+    const chartPluie = new Chart(ctxPluie, {
+      type: "bar",
+      data: {
+        labels: mois_tab,
+        datasets: [
+          {
+            label: "Nombre de jours de pluie",
+            data: pluie_tab,
+            backgroundColor: "rgba(77, 166, 255, 0.5)",
+            borderColor: "#4da6ff",
+            borderWidth: 1
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          yAxes: [{ ticks: { beginAtZero: true } }]
+        }
+      }
+    });
+
+    // 4. Gestion du WebSocket
+    const status = document.getElementById("status");
+    
+    // Correction ici : Connexion directe à localhost pour éviter les erreurs d'Upgrade en local
+    const ws = new WebSocket("ws://localhost:5002");
+
+    ws.onopen = function () {
+      status.textContent = "WebSocket connecté ";
+      status.style.color = "green";
+    };
+
+    ws.onmessage = function (evt) {
+      try {
+        const tab = JSON.parse(evt.data);
+
+        // Mise à jour des données
+        mois_tab.push(tab.mois);
+        max_tab.push(Number(tab.tmax));
+        min_tab.push(Number(tab.tmin));
+        pluie_tab.push(Number(tab.pluie));
+
+        // Ajout d'une ligne au tableau
+        const row = `
+          <tr>
+            <td>${tab.mois}</td>
+            <td>${tab.tmax}° / ${tab.tmin}°</td>
+            <td>${tab.pluie} jours</td>
+          </tr>
+        `;
+        document.querySelector("#myTable tbody").insertAdjacentHTML("beforeend", row);
+
+        // Mise à jour visuelle des graphiques
+        chartTemp.update();
+        chartPluie.update();
+
+      } catch (error) {
+        console.error("Erreur de traitement :", error);
+      }
+    };
+
+    ws.onerror = function (error) {
+      console.error("Erreur WebSocket :", error);
+      status.textContent = "Erreur de connexion WebSocket ";
+      status.style.color = "red";
+    };
+
+    ws.onclose = function () {
+      status.textContent = "Connexion fermée 🔌";
+      status.style.color = "#444";
+    };
+  </script>
+</body>
+</html>
